@@ -12,11 +12,22 @@ const videoRouter = require("./routes/videoCreator");
 const cors = require('cors')
 
 // console.log("Hello")
+const allowedOrigins = [
+    "https://ai-coding-platform-ochre-iota.vercel.app",
+    "https://ai-coding-platform-flnhsff1z-naveenpachaharas-projects.vercel.app"
+];
 
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error("Not allowed by CORS"));
+        }
+    },
     credentials: true
-}))
+}));
+
 
 app.use(express.json());
 app.use(cookieParser());
