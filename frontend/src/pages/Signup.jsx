@@ -16,7 +16,7 @@ function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { isAuthenticated, loading } = useSelector((state) => state.auth); // Removed error as it wasn't used
+  const { isAuthenticated, loading, error } = useSelector((state) => state.auth);
 
   const {
     register,
@@ -107,6 +107,12 @@ function Signup() {
                 <span className="text-error text-sm mt-1">{errors.password.message}</span>
               )}
             </div>
+
+            {error && (
+              <div className="alert alert-error mt-4">
+                <span>{error}</span>
+              </div>
+            )}
 
             {/* Submit Button */}
             <div className="form-control mt-8 flex justify-center"> 
