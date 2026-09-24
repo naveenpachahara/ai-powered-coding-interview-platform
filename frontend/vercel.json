@@ -1,10 +1,12 @@
-
 {
   "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://ai-coding-platform-backend-26ws.onrender.com/:path*"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
 }
-
