@@ -28,7 +28,7 @@ function Homepage() {
     const fetchSolvedProblems = async () => {
       try {
         const { data } = await axiosClient.get('/problem/problemSolvedByUser');
-        setSolvedProblems(data);
+       setSolvedProblems(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error('Error fetching solved problems:', error);
       }
