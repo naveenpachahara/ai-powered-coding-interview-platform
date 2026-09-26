@@ -15,8 +15,7 @@ import AdminUpload from "./components/AdminUpload"
 function App(){
   
   const dispatch = useDispatch();
-  const {isAuthenticated,user,loading} = useSelector((state)=>state.auth);
-
+    const {isAuthenticated,user,initializing} = useSelector((state)=>state.auth);
   // check initial authentication
   useEffect(() => {
     dispatch(checkAuth());
