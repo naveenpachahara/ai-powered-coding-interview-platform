@@ -1,100 +1,65 @@
-import { useState, useRef, useEffect } from "react";
-import { useForm } from "react-hook-form";
-import axiosClient from "../utils/axiosClient";
-import { Send } from 'lucide-react';
+const { GoogleGenAI } = require("@google/genai");
 
-function ChatAi({ problem }) {
-    const [messages, setMessages] = useState([
-        { role: 'user', parts: [{ text: "Hi" }] },
-        { role: 'model', parts: [{ text: "Hi! Is problem ke baare mein kuch bhi poocho - hint, code review ya complexity." }] }
-    ]);
-    const [sending, setSending] = useState(false);
+const solveDoubt = async (req, res) => {
+    try {
+        const { messages, title, description, testCases, startCode } = req.body;
 
-    const { register, handleSubmit, reset, formState: { errors } } = useForm();
-    const messagesEndRef = useRef(null);
+        if (!Array.isArray(messages) || messages.length === 0)
+            return res.status(400).json({ message: "messages must be a non-empty array" });
 
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages, sending]);
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_KEY });
 
-    const onSubmit = async (data) => {
-        // Naya sawaal history mein jodo, phir wahi poori history API ko bhejo
-        const history = [...messages, { role: 'user', parts: [{ text: data.message }] }];
-        setMessages(history);
-        reset();
-        setSending(true);
+        const response = await ai.models.generateContent({
+            model: "gemini-flash-latest",
+            contents: messages,
+            config: {
+                systemInstruction: `
+You are an expert Data Structures and Algorithms (DSA) tutor specializing in helping users solve coding problems. Your role is strictly limited to DSA-related assistance only.
 
-        try {
-            const response = await axiosClient.post("/ai/chat", {
-                messages: history,
-                title: problem?.title,
-                description: problem?.description,
-                testCases: problem?.visibleTestCases,
-                startCode: problem?.startCode
-            });
+## CURRENT PROBLEM CONTEXT:
+[PROBLEM_TITLE]: ${title}
+[PROBLEM_DESCRIPTION]: ${description}
+[EXAMPLES]: ${JSON.stringify(testCases)}
+[startCode]: ${JSON.stringify(startCode)}
 
-            setMessages(prev => [...prev, {
-                role: 'model',
-                parts: [{ text: response.data.message || "No response from AI" }]
-            }]);
-        } catch (error) {
-            console.error("API Error:", error);
-            setMessages(prev => [...prev, {
-                role: 'model',
-                parts: [{ text: error.response?.data?.message || "Error from AI Chatbot" }]
-            }]);
-        } finally {
-            setSending(false);
-        }
-    };
+## YOUR CAPABILITIES:
+1. **Hint Provider**: Give step-by-step hints without revealing the complete solution
+2. **Code Reviewer**: Debug and fix code submissions with explanations
+3. **Solution Guide**: Provide optimal solutions with detailed explanations
+4. **Complexity Analyzer**: Explain time and space complexity trade-offs
+5. **Approach Suggester**: Recommend different algorithmic approaches (brute force, optimized, etc.)
+6. **Test Case Helper**: Help create additional test cases for edge case validation
 
-    return (
-        <div className="flex flex-col h-screen max-h-[80vh] min-h-[500px]">
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map((msg, index) => (
-                    <div
-                        key={index}
-                        className={`chat ${msg.role === "user" ? "chat-end" : "chat-start"}`}
-                    >
-                        <div className="chat-bubble bg-base-200 text-base-content whitespace-pre-wrap">
-                            {msg.parts[0].text}
-                        </div>
-                    </div>
-                ))}
+## RESPONSE FORMAT:
+- Use clear, concise explanations
+- Format code with proper syntax highlighting
+- Use examples to illustrate concepts
+- Always relate back to the current problem context
+- Always respond in the language the user is comfortable with
 
-                {sending && (
-                    <div className="chat chat-start">
-                        <div className="chat-bubble bg-base-200 text-base-content">
-                            <span className="loading loading-dots loading-sm"></span>
-                        </div>
-                    </div>
-                )}
+## STRICT LIMITATIONS:
+- ONLY discuss topics related to the current DSA problem
+- DO NOT help with non-DSA topics (web development, databases, etc.)
+- If asked about unrelated topics, politely redirect: "I can only help with the current DSA problem. What specific aspect of this problem would you like assistance with?"
 
-                <div ref={messagesEndRef} />
-            </div>
+## TEACHING PHILOSOPHY:
+- Encourage understanding over memorization
+- Guide users to discover solutions rather than just providing answers
+- Explain the "why" behind algorithmic choices
+`
+            },
+        });
 
-            <form
-                onSubmit={handleSubmit(onSubmit)}
-                className="sticky bottom-0 p-4 bg-base-100 border-t"
-            >
-                <div className="flex items-center">
-                    <input
-                        placeholder="Ask me anything"
-                        className="input input-bordered flex-1"
-                        disabled={sending}
-                        {...register("message", { required: true, minLength: 2 })}
-                    />
-                    <button
-                        type="submit"
-                        className="btn btn-ghost ml-2"
-                        disabled={!!errors.message || sending}
-                    >
-                        <Send size={20} />
-                    </button>
-                </div>
-            </form>
-        </div>
-    );
-}
+        res.status(200).json({
+            message: response.text
+        });
 
-export default ChatAi;
+    } catch (err) {
+        console.error("Gemini API Error:", err);
+        res.status(500).json({
+            message: "AI Error: " + err.message
+        });
+    }
+};
+
+module.exports = solveDoubt;
