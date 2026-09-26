@@ -1,25 +1,12 @@
 const { GoogleGenAI } = require("@google/genai");
 
-// Pehla model band ya busy ho toh list ka agla model try hoga
 const MODELS = ["gemini-3.8-flash", "gemini-flash-latest", "gemini-flash-lite-latest"];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Ye errors aayein toh agla model try karo (busy, limit, ya model band)
-const shouldTryNext = (err) => {
-    const text = String(err?.message || "");
-    return text.includes("503") || text.includes("UNAVAILABLE") ||
-           text.includes("429") || text.includes("RESOURCE_EXHAUSTED") ||
-           text.includes("overloaded") || text.includes("high demand") ||
-           text.includes("404") || text.includes("NOT_FOUND") ||
-           text.includes("no longer available");
-};
-
-// Model band hai (404) toh usi model pe dobara try karne ka fayda nahi
-const isModelGone = (err) => {
-    const text = String(err?.message || "");
-    return text.includes("404") || text.includes("NOT_FOUND") || text.includes("no longer available");
-};
+const has = (err, words) => words.some((w) => String(err?.message || "").includes(w));
+const BUSY = ["503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "overloaded", "high demand"];
+const GONE = ["404", "NOT_FOUND", "no longer available"];
 
 const solveDoubt = async (req, res) => {
     try {
@@ -33,14 +20,45 @@ const solveDoubt = async (req, res) => {
 
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_KEY });
 
-        const systemInstruction = `
-You are an expert Data Structures and Algorithms (DSA) tutor specializing in helping users solve coding problems. Your role is strictly limited to DSA-related assistance only.
+        const systemInstruction = `You are an expert DSA tutor. Only help with the current problem.
+Problem title: ${title}
+Problem description: ${description}
+Examples: ${JSON.stringify(testCases)}
+Start code: ${JSON.stringify(startCode)}
+You can give hints, review code, explain approaches and time/space complexity.
+Prefer hints before full solutions. Reply in the user's language.
+If asked about unrelated topics, say you can only help with this DSA problem.`;
 
-## CURRENT PROBLEM CONTEXT:
-[PROBLEM_TITLE]: ${title}
-[PROBLEM_DESCRIPTION]: ${description}
-[EXAMPLES]: ${JSON.stringify(testCases)}
-[startCode]: ${JSON.stringify(startCode)}
+        const failures = [];
 
-## YOUR CAPABILITIES:
-1. **Hint Provider**:
+        for (const model of MODELS) {
+            for (let attempt = 1; attempt <= 2; attempt++) {
+                try {
+                    const response = await ai.models.generateContent({
+                        model,
+                        contents: messages,
+                        config: { systemInstruction },
+                    });
+                    console.log("Gemini reply from " + model);
+                    return res.status(200).json({ message: response.text });
+                } catch (err) {
+                    console.error("Gemini API Error (" + model + ", try " + attempt + "):", err.message);
+                    if (has(err, GONE)) { failures.push(model + ": not available"); break; }
+                    if (!has(err, BUSY)) throw err;
+                    if (attempt === 2) failures.push(model + ": busy");
+                    await sleep(1000 * attempt);
+                }
+            }
+        }
+
+        return res.status(503).json({
+            message: "AI abhi busy hai, 1-2 minute baad try karo. (" + failures.join(", ") + ")"
+        });
+
+    } catch (err) {
+        console.error("Gemini API Error:", err);
+        res.status(500).json({ message: "AI Error: " + err.message });
+    }
+};
+
+module.exports = solveDoubt;
