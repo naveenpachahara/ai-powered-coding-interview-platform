@@ -1,109 +1,80 @@
 const axios = require('axios');
 
-
-const getLanguageById = (lang)=>{
-
+const getLanguageById = (lang) => {
     const language = {
-        "c++":54,
-        "java":62,
-        "javascript":63
-    }
-
-
-    return language[lang.toLowerCase()];
-}
-
-
-const submitBatch = async (submissions)=>{
-
-
-const options = {
-  method: 'POST',
-  url: 'https://judge0-ce.p.rapidapi.com/submissions/batch',
-  params: {
-    base64_encoded: 'false'
-  },
-  headers: {
-    'x-rapidapi-key': process.env.JUDGE0_KEY,
-    'x-rapidapi-host': 'judge0-ce.p.rapidapi.com',
-    'Content-Type': 'application/json'
-  },
-  data: {
-    submissions
-  }
+        "c++": 54,
+        "java": 62,
+        "javascript": 63
+    };
+    if (!lang) return undefined;
+    const key = lang.toLowerCase() === 'cpp' ? 'c++' : lang.toLowerCase();
+    return language[key];
 };
-
-async function fetchData() {
-	try {
-		const response = await axios.request(options);
-		return response.data;
-	} catch (error) {
-		console.error(error);
-	}
-}
-
- return await fetchData();
-
-}
-
 
 const waiting = (timer) => new Promise(resolve => setTimeout(resolve, timer));
 
-// ["db54881d-bcf5-4c7b-a2e3-d33fe7e25de7","ecc52a9b-ea80-4a00-ad50-4ab6cc3bb2a1","1b35ec3b-5776-48ef-b646-d5522bdeb2cc"]
+const submitBatch = async (submissions) => {
+    const options = {
+        method: 'POST',
+        url: 'https://judge0-ce.p.rapidapi.com/submissions/batch',
+        params: { base64_encoded: 'false' },
+        headers: {
+            'x-rapidapi-key': process.env.JUDGE0_KEY,
+            'x-rapidapi-host': 'judge0-ce.p.rapidapi.com',
+            'Content-Type': 'application/json'
+        },
+        data: { submissions }
+    };
 
-const submitToken = async(resultToken)=>{
-
-const options = {
-  method: 'GET',
-  url: 'https://judge0-ce.p.rapidapi.com/submissions/batch',
-  params: {
-    tokens: resultToken.join(","),
-    base64_encoded: 'false',
-    fields: '*'
-  },
-  headers: {
-    'x-rapidapi-key': process.env.JUDGE0_KEY,
-    'x-rapidapi-host': 'judge0-ce.p.rapidapi.com'
-  }
+    try {
+        const response = await axios.request(options);
+        if (!Array.isArray(response.data))
+            throw new Error("Unexpected Judge0 response");
+        return response.data;
+    } catch (error) {
+        const detail = error.response?.data?.message || error.response?.data || error.message;
+        console.error("Judge0 submitBatch failed:", detail);
+        throw new Error("Code execution service unavailable: " + JSON.stringify(detail));
+    }
 };
 
-async function fetchData() {
-	try {
-		const response = await axios.request(options);
-		return response.data;
-	} catch (error) {
-		console.error(error);
-	}
-}
+const submitToken = async (resultToken) => {
+    const options = {
+        method: 'GET',
+        url: 'https://judge0-ce.p.rapidapi.com/submissions/batch',
+        params: {
+            tokens: resultToken.join(","),
+            base64_encoded: 'false',
+            fields: '*'
+        },
+        headers: {
+            'x-rapidapi-key': process.env.JUDGE0_KEY,
+            'x-rapidapi-host': 'judge0-ce.p.rapidapi.com'
+        }
+    };
 
+    // Zyada se zyada ~30 second wait karo, hamesha ke liye nahi
+    for (let attempt = 0; attempt < 30; attempt++) {
+        let result;
+        try {
+            const response = await axios.request(options);
+            result = response.data;
+        } catch (error) {
+            const detail = error.response?.data?.message || error.response?.data || error.message;
+            console.error("Judge0 submitToken failed:", detail);
+            throw new Error("Code execution service unavailable: " + JSON.stringify(detail));
+        }
 
- while(true){
+        const submissions = result?.submissions || [];
+        const done = submissions.length > 0 && submissions.every((r) => r && r.status_id > 2);
+        if (done) return submissions;
 
- const result =  await fetchData();
+        await waiting(1000);
+    }
 
-  const IsResultObtained =  result.submissions.every((r)=>r.status_id>2);
+    throw new Error("Code execution timed out");
+};
 
-  if(IsResultObtained)
-    return result.submissions;
-
-  
-  await waiting(1000);
-}
-
-
-
-}
-
-
-module.exports = {getLanguageById,submitBatch,submitToken};
-
-
-
-
-
-
-
-
-// 
+module.exports = { getLanguageById, submitBatch, submitToken };
 
 
