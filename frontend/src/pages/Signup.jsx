@@ -9,7 +9,12 @@ import { registerUser } from '../authSlice';
 const signupSchema = z.object({
   firstName: z.string().min(3, "Minimum character should be 3"),
   emailId: z.string().email("Invalid Email"),
-  password: z.string().min(8, "Password is too weak")
+    password: z.string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(/[a-z]/, "Add a lowercase letter")
+    .regex(/[A-Z]/, "Add an uppercase letter")
+    .regex(/[0-9]/, "Add a number")
+    .regex(/[^A-Za-z0-9]/, "Add a symbol (@, #, !)")
 });
 
 function Signup() {
