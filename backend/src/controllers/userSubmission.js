@@ -3,7 +3,7 @@ const Problem = require("../models/problem");
 const Submission = require("../models/submission");
 const { getLanguageById, submitBatch, submitToken } = require("../utils/problemUtility");
 
-// Judge0 status: 3 = Accepted, 4 = Wrong Answer, baaki sab = error (TLE, compile, runtime)
+// Judge0 status: 3 = Accepted, 4 = Wrong Answer, baaki sab = error
 const summarize = (testResult) => {
     let testCasesPassed = 0, runtime = 0, memory = 0;
     let status = 'accepted';
@@ -68,17 +68,21 @@ const submitCode = async (req, res) => {
         const problem = await loadProblem(problemId, res);
         if (!problem) return;
 
+        // Hidden test cases na hon toh visible wale use karo
+        const testCases = problem.hiddenTestCases.length > 0
+            ? problem.hiddenTestCases
+            : problem.visibleTestCases;
+
         const submittedResult = await Submission.create({
             userId, problemId, code, language,
             status: 'pending',
-            testCasesTotal: problem.hiddenTestCases.length
+            testCasesTotal: testCases.length
         });
 
         let testResult;
         try {
-            testResult = await runJudge(code, languageId, problem.hiddenTestCases);
+            testResult = await runJudge(code, languageId, testCases);
         } catch (judgeErr) {
-            // Fail hone pe bhi status update karo, "pending" mat chhodo
             submittedResult.status = 'error';
             submittedResult.errorMessage = judgeErr.message;
             await submittedResult.save();
