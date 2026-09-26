@@ -33,8 +33,10 @@ const register = async (req,res)=>{
         message:"Loggin Successfully"
     })
     }
-    catch(err){
-        res.status(400).send("Error: "+err);
+        catch(err){
+        if (err.code === 11000)
+            return res.status(400).send("Error: Email already exists");
+        res.status(400).send("Error: " + err.message);
     }
 }
 
