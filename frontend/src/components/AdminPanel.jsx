@@ -83,8 +83,11 @@ function AdminPanel() {
       await axiosClient.post('/problem/create', data);
       alert('Problem created successfully!');
       navigate('/');
-    } catch (error) {
-      alert(`Error: ${error.response?.data?.message || error.message}`);
+        } catch (error) {
+      const msg = typeof error.response?.data === 'string'
+        ? error.response.data
+        : error.response?.data?.message;
+      alert(`Error: ${msg || error.message}`);
     }
   };
 
