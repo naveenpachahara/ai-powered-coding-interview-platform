@@ -214,6 +214,99 @@ Sign up normally, then change that user's `role` to `"admin"` directly in MongoD
 
 ---
 
+## 🏗️ Architecture
+
+### System Overview
+
+```mermaid
+flowchart LR
+    U["👤 User / Admin<br/>Browser"]
+
+    subgraph FE["Frontend - Vercel"]
+        R["React 19 + Vite<br/>Redux, Monaco Editor"]
+    end
+
+    subgraph BE["Backend - Render"]
+        API["Express 5 API"]
+        MW["Auth Middleware<br/>JWT + role check"]
+        CTRL["Controllers<br/>Auth - Problems - Submissions - AI - Video"]
+    end
+
+    subgraph DATA["Data Layer"]
+        M[("MongoDB<br/>users, problems,<br/>submissions, videos")]
+        RD[("Redis<br/>JWT blocklist")]
+    end
+
+    subgraph EXT["External Services"]
+        J["Judge0 CE<br/>Code execution"]
+        G["Google Gemini<br/>AI tutor"]
+        C["Cloudinary<br/>Video storage"]
+    end
+
+    U --> R
+    R -- "/api/* rewrite (vercel.json)" --> API
+    API --> MW --> CTRL
+    CTRL --> M
+    MW --> RD
+    CTRL --> J
+    CTRL --> G
+    CTRL -- "signed upload params" --> R
+    R -- "direct video upload" --> C
+```
+
+### Code Submission Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User (Browser)
+    participant A as Express API
+    participant R as Redis
+    participant D as MongoDB
+    participant J as Judge0
+
+    U->>A: POST /submission/submit/:id (code, language)
+    A->>R: Is token blocklisted?
+    R-->>A: No
+    A->>D: Load problem + test cases
+    A->>D: Create submission (status: pending)
+    A->>J: Batch submit (code x test cases)
+    loop Poll up to ~30s
+        A->>J: Get results by tokens
+    end
+    J-->>A: Verdicts, runtime, memory
+    A->>D: Update submission (accepted / wrong / error)
+    A->>D: Mark problem solved (only if accepted)
+    A-->>U: Result (passed / total, runtime, memory)
+```
+
+### AI Tutor Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Express API
+    participant G as Gemini
+
+    U->>A: POST /ai/chat (messages + problem context)
+    A->>G: Try gemini-3.8-flash
+    alt Busy or unavailable (503 / 429 / 404)
+        A->>G: Retry, then fallback model
+    end
+    G-->>A: Hint / code review / explanation
+    A-->>U: AI reply
+```
+
+### Key Design Decisions
+
+- **Stateless auth with revocation**: JWT in an `httpOnly` cookie, and Redis stores logged-out tokens so they are rejected immediately.
+- **Server-side judging**: the user's code never runs on the app server, it is sandboxed by Judge0.
+- **Verified problems**: an admin's reference solution must pass the test cases before a problem is saved.
+- **Direct video upload**: the backend only issues a signed upload request, and the video goes from browser straight to Cloudinary.
+- **Resilient AI**: retries plus model fallback so the tutor keeps working under load.
+- **Same-origin API in production**: Vercel rewrites `/api/*` to the backend, which avoids cross-site cookie issues.
+
+---
+
 ## 🔄 How It Works
 
 ```
